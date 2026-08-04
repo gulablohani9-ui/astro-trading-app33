@@ -30,7 +30,7 @@ class MainHomeScreen extends StatefulWidget {
 }
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
-  int _currentIndex = 1;
+  int _currentIndex = 0;
 
   final List<Widget> _screens = [
     const IntradayScreen(),
@@ -60,10 +60,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
 // ==================== LAHIRI AYANAMSHA + MUMBAI DEFAULT ENGINE ====================
 class LahiriEngine {
-  // Lahiri Ayanamsha Value Calculation for J2000
   static double getLahiriAyanamsha(double julianDay) {
-    double t = (julianDay - 2451545.0) / 36525.0; // Centuries from J2000
-    // Lahiri Ayanamsha Base: ~23° 51' 25" at J2000 + Precession Motion
+    double t = (julianDay - 2451545.0) / 36525.0;
     return 23.85694 + 1.396 * t; 
   }
 
@@ -100,16 +98,13 @@ class LahiriEngine {
         meanSayanaLong = 0.0;
     }
 
-    // Convert Sayana to Nirayana using Lahiri Ayanamsha
     double ayanamsha = getLahiriAyanamsha(julianDay);
     double nirayanaLong = meanSayanaLong - ayanamsha;
 
     return (nirayanaLong % 360 + 360) % 360;
   }
 
-  // Julian Day for Mumbai Local/IST Time (UTC + 5:30)
   static double getJulianDayMumbai(DateTime dt) {
-    // Adjusting for Mumbai Coordinate Offset (72.8777° E Longitude)
     int year = dt.year;
     int month = dt.month;
     int day = dt.day;
@@ -130,6 +125,67 @@ class LahiriEngine {
         1524.5;
   }
 
+  // Calculate Daily Intraday Transits (Mumbai Market Hours: 9:15 AM - 3:30 PM)
+  static List<Map<String, String>> calculateDailyIntradayLahiri(DateTime today) {
+    List<Map<String, String>> dailyTransits = [];
+    
+    List<String> timeSlots = [
+      '09:15 AM - 10:30 AM',
+      '10:30 AM - 11:45 AM',
+      '11:45 AM - 01:00 PM',
+      '01:00 PM - 02:15 PM',
+      '02:15 PM - 03:30 PM',
+    ];
+
+    double jdBull = getJulianDayMumbai(today);
+    double moonLong = getPlanetNirayanaLongitude('Moon', jdBull);
+    double marsLong = getPlanetNirayanaLongitude('Mars', jdBull);
+    double mercLong = getPlanetNirayanaLongitude('Mercury', jdBull);
+
+    dailyTransits.add({
+      'pair': 'Opening Bell (Moon Orb)',
+      'time': timeSlots[0],
+      'status': 'Mumbai Market Opening Phase',
+      'effect': (moonLong % 30 < 15) ? 'Positive Opening Push' : 'Volatile Reversal',
+      'type': (moonLong % 30 < 15) ? 'Positive' : 'Neutral',
+    });
+
+    dailyTransits.add({
+      'pair': 'Mars / Mercury Lahiri Aspect',
+      'time': timeSlots[1],
+      'status': 'Mid-Morning Momentum',
+      'effect': ((marsLong - mercLong).abs() < 60) ? 'Strong Momentum Shift' : 'Consolidation Phase',
+      'type': 'Positive',
+    });
+
+    dailyTransits.add({
+      'pair': 'Lunar Degree Shift (Nirayana)',
+      'time': timeSlots[2],
+      'status': 'Mid-Day Trading Phase',
+      'effect': 'High Volatility Expected',
+      'type': 'Neutral',
+    });
+
+    dailyTransits.add({
+      'pair': 'Saturn Stability Check',
+      'time': timeSlots[3],
+      'status': 'Post-Lunch Trend',
+      'effect': 'Bearish Pressure / Rangebound',
+      'type': 'Negative',
+    });
+
+    dailyTransits.add({
+      'pair': 'Closing Bell Conjunction',
+      'time': timeSlots[4],
+      'status': 'Final Market Hour',
+      'effect': 'Strong Closing Move',
+      'type': 'Positive',
+    });
+
+    return dailyTransits;
+  }
+
+  // Calculate Monthly Transits
   static List<Map<String, String>> calculateLahiriTransits(int year, int month) {
     List<Map<String, String>> transits = [];
     List<String> allPlanets = ['Moon', 'Mars', 'Mercury', 'Venus', 'Jupiter', 'Saturn', 'Rahu', 'Ketu'];
@@ -155,8 +211,8 @@ class LahiriEngine {
             if (diff < 3.2 || diff > 356.8) {
               double exactOrb = diff > 180 ? (360 - diff) : diff;
 
-              String effect = 'Moderate Impact';
-              String type = 'Positive';
+              String effect = 'Volatile Reversal';
+              String type = 'Neutral';
 
               if ((p1 == 'Mars' || p2 == 'Mars') && (p1 == 'Mercury' || p2 == 'Mercury')) {
                 effect = 'Major Bullish Momentum';
@@ -164,9 +220,6 @@ class LahiriEngine {
               } else if ((p1 == 'Saturn' || p2 == 'Saturn') && (p1 == 'Rahu' || p2 == 'Rahu')) {
                 effect = 'Major Bearish Drag';
                 type = 'Negative';
-              } else if (p1 == 'Moon' || p2 == 'Moon') {
-                effect = 'Volatile Reversal';
-                type = 'Neutral';
               }
 
               String period = hour >= 12 ? 'PM' : 'AM';
@@ -197,7 +250,29 @@ class LahiriEngine {
   ];
 }
 
-// ==================== MONTHLY SCREEN ====================
+// ==================== 1. DAILY INTRADAY SCREEN ====================
+class IntradayScreen extends StatelessWidget {
+  const IntradayScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    DateTime today = DateTime.now();
+    List<Map<String, String>> dailyData = LahiriEngine.calculateDailyIntradayLahiri(today);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Daily Intraday (${today.day} ${LahiriEngine.monthNames[today.month - 1]})'),
+        centerTitle: true,
+      ),
+      body: ListView.builder(
+        itemCount: dailyData.length,
+        itemBuilder: (context, i) => TransitCard(data: dailyData[i]),
+      ),
+    );
+  }
+}
+
+// ==================== 2. MONTHLY SCREEN ====================
 class MonthlyScreen extends StatefulWidget {
   const MonthlyScreen({super.key});
 
@@ -270,20 +345,7 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
   }
 }
 
-// ==================== INTRADAY SCREEN ====================
-class IntradayScreen extends StatelessWidget {
-  const IntradayScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Daily Intraday (Mumbai Market Timing)'), centerTitle: true),
-      body: const Center(child: Text('Check Monthly Tab for Lahiri Engine')),
-    );
-  }
-}
-
-// ==================== MANUAL SCREEN ====================
+// ==================== 3. MANUAL SCREEN ====================
 class ManualSearchScreen extends StatelessWidget {
   const ManualSearchScreen({super.key});
 
@@ -291,7 +353,7 @@ class ManualSearchScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Manual Check'), centerTitle: true),
-      body: const Center(child: Text('Manual Engine Active')),
+      body: const Center(child: Text('Manual Engine Active', style: TextStyle(color: Colors.tealAccent))),
     );
   }
 }
