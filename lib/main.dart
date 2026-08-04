@@ -30,7 +30,7 @@ class MainHomeScreen extends StatefulWidget {
 }
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
-  int _currentIndex = 1;
+  int _currentIndex = 2; // Default to Manual Check
 
   final List<Widget> _screens = [
     const IntradayScreen(),
@@ -58,7 +58,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   }
 }
 
-// ==================== LAHIRI AYANAMSHA + DEDUPLICATED ENGINE ====================
+// ==================== LAHIRI AYANAMSHA ENGINE ====================
 class LahiriEngine {
   static double getLahiriAyanamsha(double julianDay) {
     double t = (julianDay - 2451545.0) / 36525.0;
@@ -125,7 +125,57 @@ class LahiriEngine {
         1524.5;
   }
 
-  // Deduplicated Peak Conjunction Detector
+  // CUSTOM PAIR SEARCH ENGINE
+  static List<Map<String, String>> searchSpecificPairTransits(String p1, String p2, int year, int month) {
+    List<Map<String, String>> rawEvents = [];
+    int daysInMonth = DateTime(year, month + 1, 0).day;
+
+    for (int day = 1; day <= daysInMonth; day++) {
+      for (int hour = 0; hour < 24; hour += 3) {
+        DateTime checkTime = DateTime(year, month, day, hour, 0);
+        double jd = getJulianDayMumbai(checkTime);
+
+        double l1 = getPlanetNirayanaLongitude(p1, jd);
+        double l2 = getPlanetNirayanaLongitude(p2, jd);
+        double diff = (l1 - l2).abs();
+
+        if (diff < 3.0 || diff > 357.0) {
+          double exactOrb = diff > 180 ? (360 - diff) : diff;
+
+          String period = hour >= 12 ? 'PM' : 'AM';
+          int displayHour = hour % 12 == 0 ? 12 : hour % 12;
+          String exactTimeStr = "$day ${monthNames[month - 1]} $year @ ${displayHour.toString().padLeft(2, '0')}:00 $period (IST)";
+
+          rawEvents.add({
+            'pair': '$p1 ☌ $p2',
+            'time': exactTimeStr,
+            'status': 'Orb: ${exactOrb.toStringAsFixed(1)}° (Lahiri)',
+            'dayKey': '$day',
+            'orbVal': exactOrb.toString(),
+          });
+        }
+      }
+    }
+
+    // Deduplicate (Keep Minimum Orb per day)
+    Map<String, Map<String, String>> uniqueMap = {};
+    for (var event in rawEvents) {
+      String key = event['dayKey']!;
+      double currentOrb = double.parse(event['orbVal']!);
+
+      if (!uniqueMap.containsKey(key)) {
+        uniqueMap[key] = event;
+      } else {
+        double existingOrb = double.parse(uniqueMap[key]!['orbVal']!);
+        if (currentOrb < existingOrb) {
+          uniqueMap[key] = event;
+        }
+      }
+    }
+
+    return uniqueMap.values.toList();
+  }
+
   static List<Map<String, String>> calculateLahiriTransitsClean(int year, int month) {
     List<Map<String, String>> rawEvents = [];
     List<String> allPlanets = ['Moon', 'Mars', 'Mercury', 'Venus', 'Jupiter', 'Saturn', 'Rahu', 'Ketu'];
@@ -181,7 +231,6 @@ class LahiriEngine {
       }
     }
 
-    // Filter Out Duplicates (Keep Only Best Minimum Orb per Day)
     Map<String, Map<String, String>> uniqueMap = {};
     for (var event in rawEvents) {
       String key = event['dayKey']!;
@@ -263,6 +312,152 @@ class LahiriEngine {
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
   ];
+}
+
+// ==================== 3. MANUAL SEARCH SCREEN (DYNAMIC PAIR FINDER) ====================
+class ManualSearchScreen extends StatefulWidget {
+  const ManualSearchScreen({super.key});
+
+  @override
+  State<ManualSearchScreen> createState() => _ManualSearchScreenState();
+}
+
+class _ManualSearchScreenState extends State<ManualSearchScreen> {
+  String p1 = 'Moon';
+  String p2 = 'Mars';
+  DateTime selectedDate = DateTime(2026, 8);
+  List<Map<String, String>> searchResults = [];
+  bool hasSearched = false;
+
+  final List<String> planets = [
+    'Moon', 'Mars', 'Mercury', 'Venus', 'Jupiter', 'Saturn', 'Rahu', 'Ketu'
+  ];
+
+  void changeMonth(int increment) {
+    setState(() {
+      selectedDate = DateTime(selectedDate.year, selectedDate.month + increment);
+      if (hasSearched) runSearch();
+    });
+  }
+
+  void runSearch() {
+    setState(() {
+      searchResults = LahiriEngine.searchSpecificPairTransits(p1, p2, selectedDate.year, selectedDate.month);
+      hasSearched = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Manual Pair Transit Finder'), centerTitle: true),
+      body: Padding(
+        padding: const EdgeInsets.all(15.0),
+        child: Column(
+          children: [
+            // Dropdowns
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: p1,
+                    decoration: const InputDecoration(labelText: 'Planet 1', border: OutlineInputBorder()),
+                    items: planets.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    onChanged: (val) => setState(() => p1 = val!),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('☌', style: TextStyle(fontSize: 22, color: Colors.tealAccent)),
+                ),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: p2,
+                    decoration: const InputDecoration(labelText: 'Planet 2', border: OutlineInputBorder()),
+                    items: planets.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    onChanged: (val) => setState(() => p2 = val!),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Month Selector
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.tealAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.tealAccent),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, color: Colors.tealAccent, size: 18),
+                    onPressed: () => changeMonth(-1),
+                  ),
+                  Text(
+                    '${LahiriEngine.monthNames[selectedDate.month - 1]} ${selectedDate.year}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.tealAccent),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_forward_ios, color: Colors.tealAccent, size: 18),
+                    onPressed: () => changeMonth(1),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Search Button
+            SizedBox(
+              width: double.infinity,
+              height: 45,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.tealAccent,
+                  foregroundColor: Colors.black,
+                ),
+                onPressed: runSearch,
+                icon: const Icon(Icons.search),
+                label: const Text('CALCULATE TRANSITS', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 15),
+
+            // Results List
+            Expanded(
+              child: !hasSearched
+                  ? const Center(child: Text('Select 2 Planets & Click Calculate', style: TextStyle(color: Colors.grey)))
+                  : searchResults.isEmpty
+                      ? Center(child: Text('No Conjunction Found for $p1 & $p2 in ${LahiriEngine.monthNames[selectedDate.month - 1]} ${selectedDate.year}.', textAlign: TextAlign.center))
+                      : ListView.builder(
+                          itemCount: searchResults.length,
+                          itemBuilder: (context, i) {
+                            var item = searchResults[i];
+                            return Card(
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              color: const Color(0xFF1E1E1E),
+                              shape: RoundedRectangleBorder(
+                                side: const BorderSide(color: Colors.tealAccent, width: 1.5),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: ListTile(
+                                leading: const Icon(Icons.stars, color: Colors.tealAccent),
+                                title: Text(item['pair']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                subtitle: Text(item['time']!, style: const TextStyle(color: Colors.tealAccent, fontWeight: FontWeight.bold)),
+                                trailing: Text(item['status']!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ==================== 1. DAILY INTRADAY SCREEN ====================
@@ -360,19 +555,6 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
   }
 }
 
-// ==================== 3. MANUAL SCREEN ====================
-class ManualSearchScreen extends StatelessWidget {
-  const ManualSearchScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Manual Check'), centerTitle: true),
-      body: const Center(child: Text('Manual Engine Active', style: TextStyle(color: Colors.tealAccent))),
-    );
-  }
-}
-
 // ==================== SHARED WIDGET ====================
 class TransitCard extends StatelessWidget {
   final Map<String, String> data;
@@ -397,26 +579,4 @@ class TransitCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(data['pair']!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text(
-                  data['effect']!,
-                  style: TextStyle(color: cardColor, fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(data['time']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.tealAccent)),
-                Text(data['status']!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+              mainAxisAlignment: MainAxisAlignment.spaceBetw
