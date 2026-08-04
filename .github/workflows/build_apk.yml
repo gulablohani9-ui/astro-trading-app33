@@ -34,3 +34,4 @@ jobs:
         with:
           name: AstroTrading-App33
           path: build/app/outputs/flutter-apk/app-release.apk
+ 
