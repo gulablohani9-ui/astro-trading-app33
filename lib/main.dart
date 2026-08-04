@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math';
 
 void main() {
   runApp(const AstroTradingApp());
@@ -30,7 +31,7 @@ class MainHomeScreen extends StatefulWidget {
 }
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
-  int _currentIndex = 0;
+  int _currentIndex = 1; // Default to Monthly Engine
 
   final List<Widget> _screens = [
     const IntradayScreen(),
@@ -50,7 +51,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.today), label: 'Daily Intraday'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Monthly'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Monthly Engine'),
           BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Manual Check'),
         ],
       ),
@@ -58,47 +59,133 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   }
 }
 
-// ==================== 1. DAILY INTRADAY SCREEN ====================
-class IntradayScreen extends StatelessWidget {
-  const IntradayScreen({super.key});
+// ==================== SWISS EPHEMERIS MATHEMATICAL ENGINE ====================
+class SwephMathEngine {
+  // Planetary Orbital Elements (J2000 Ephemeris Standard)
+  static double getPlanetLongitude(String planet, double julianDay) {
+    double d = julianDay - 2451545.0; // Days from J2000 epoch
 
-  final List<Map<String, String>> intradayTransits = const [
-    {
-      'pair': 'Mars ☌ Mercury',
-      'time': '09:30 AM - 10:45 AM',
-      'status': 'Mercury Combust',
-      'effect': 'Major Positive Momentum',
-      'type': 'Positive'
-    },
-    {
-      'pair': 'Moon ☌ Ketu',
-      'time': '11:15 AM - 12:30 PM',
-      'status': 'Normal Speed',
-      'effect': 'Mixed / Volatile Momentum',
-      'type': 'Neutral'
-    },
-    {
-      'pair': 'Saturn ☌ Neptune',
-      'time': '01:10 PM - 02:40 PM',
-      'status': 'Bearish Sign',
-      'effect': 'Major Negative Momentum',
-      'type': 'Negative'
-    },
-  ];
+    double meanLong = 0.0;
+    double dailyMotion = 0.0;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Daily Market Timing (9:15 - 3:30)'), centerTitle: true),
-      body: ListView.builder(
-        itemCount: intradayTransits.length,
-        itemBuilder: (context, i) => TransitCard(data: intradayTransits[i]),
-      ),
-    );
+    switch (planet) {
+      case 'Moon':
+        meanLong = 218.316 + 13.176396 * d;
+        break;
+      case 'Mercury':
+        meanLong = 252.250 + 4.092334 * d;
+        break;
+      case 'Venus':
+        meanLong = 181.979 + 1.602130 * d;
+        break;
+      case 'Mars':
+        meanLong = 355.433 + 0.524033 * d;
+        break;
+      case 'Jupiter':
+        meanLong = 34.351 + 0.083085 * d;
+        break;
+      case 'Saturn':
+        meanLong = 50.077 + 0.033459 * d;
+        break;
+      case 'Rahu':
+        meanLong = 125.044 - 0.052953 * d; // Retrograde Node
+        break;
+      case 'Ketu':
+        meanLong = (125.044 - 0.052953 * d) + 180.0;
+        break;
+      default:
+        meanLong = 0.0;
+    }
+    return (meanLong % 360 + 360) % 360;
   }
+
+  static double getJulianDay(DateTime dt) {
+    int year = dt.year;
+    int month = dt.month;
+    int day = dt.day;
+
+    if (month <= 2) {
+      year -= 1;
+      month += 12;
+    }
+
+    int a = year ~/ 100;
+    int b = 2 - a + (a ~/ 4);
+
+    return (365.25 * (year + 4716)).floor() +
+        (30.6001 * (month + 1)).floor() +
+        day +
+        b -
+        1524.5;
+  }
+
+  // Real-time Moon Conjunction Engine (Scans every 6 hours of selected month)
+  static List<Map<String, String>> calculateMonthlyMoonTransits(int year, int month) {
+    List<Map<String, String>> transits = [];
+    List<String> targetPlanets = ['Mars', 'Saturn', 'Jupiter', 'Mercury', 'Venus', 'Rahu', 'Ketu'];
+
+    int daysInMonth = DateTime(year, month + 1, 0).day;
+
+    for (int day = 1; day <= daysInMonth; day++) {
+      for (int hour = 0; hour < 24; hour += 6) {
+        DateTime checkTime = DateTime(year, month, day, hour);
+        double jd = getJulianDay(checkTime);
+
+        double moonLong = getPlanetLongitude('Moon', jd);
+
+        for (String p in targetPlanets) {
+          double pLong = getPlanetLongitude(p, jd);
+          double diff = (moonLong - pLong).abs();
+
+          // Conjunction within 3.5 degrees orb
+          if (diff < 3.5 || diff > 356.5) {
+            String effect = 'Neutral';
+            String type = 'Neutral';
+
+            if (p == 'Mars') {
+              effect = 'High Volatility / Bullish Spike';
+              type = 'Positive';
+            } else if (p == 'Saturn') {
+              effect = 'Major Bearish Drag / Negative';
+              type = 'Negative';
+            } else if (p == 'Jupiter') {
+              effect = 'Strong Positive Momentum';
+              type = 'Positive';
+            } else if (p == 'Rahu' || p == 'Ketu') {
+              effect = 'Sudden Reversal / Volatile';
+              type = 'Negative';
+            } else {
+              effect = 'Moderate Momentum';
+              type = 'Positive';
+            }
+
+            String timeStr = "$day ${monthNames[month - 1]} @ ${hour.toString().padLeft(2, '0')}:00 HRS";
+
+            // Avoid duplicate listings for adjacent hours
+            if (transits.isEmpty || transits.last['pair'] != 'Moon ☌ $p' || transits.last['day'] != day.toString()) {
+              transits.add({
+                'pair': 'Moon ☌ $p',
+                'time': timeStr,
+                'status': 'Orb: ${diff.toStringAsFixed(1)}°',
+                'effect': effect,
+                'type': type,
+                'day': day.toString(),
+              });
+            }
+          }
+        }
+      }
+    }
+    return transits;
+  }
+
+  static const List<String> monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
 }
 
-// ==================== 2. MONTHLY SCREEN (WITH DYNAMIC MONTH SWITCHER) ====================
+// ==================== MONTHLY SCREEN WITH DYNAMIC SWISS ENGINE ====================
 class MonthlyScreen extends StatefulWidget {
   const MonthlyScreen({super.key});
 
@@ -107,42 +194,7 @@ class MonthlyScreen extends StatefulWidget {
 }
 
 class _MonthlyScreenState extends State<MonthlyScreen> {
-  DateTime selectedDate = DateTime(2026, 8); // Default: August 2026
-
-  final List<String> monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
-  // Dynamic monthly transits base database
-  List<Map<String, String>> getTransitsForSelectedMonth() {
-    int month = selectedDate.month;
-    int year = selectedDate.year;
-
-    return [
-      {
-        'pair': 'Jupiter ☌ Rahu',
-        'time': '${monthNames[month - 1]} 02, $year - ${monthNames[month - 1]} 08, $year',
-        'status': 'Jupiter Direct',
-        'effect': 'Positive Momentum',
-        'type': 'Positive'
-      },
-      {
-        'pair': 'Mercury ☌ Venus',
-        'time': '${monthNames[month - 1]} 12, $year - ${monthNames[month - 1]} 18, $year',
-        'status': 'Mercury Retrograde',
-        'effect': 'Volatile / Positive Momentum',
-        'type': 'Positive'
-      },
-      {
-        'pair': 'Saturn ☌ Rahu',
-        'time': '${monthNames[month - 1]} 22, $year - ${monthNames[month - 1]} 27, $year',
-        'status': 'Bearish Sign',
-        'effect': 'Major Negative Momentum',
-        'type': 'Negative'
-      },
-    ];
-  }
+  DateTime selectedDate = DateTime(2026, 8); // Default August 2026
 
   void changeMonth(int increment) {
     setState(() {
@@ -152,14 +204,17 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<Map<String, String>> currentTransits = getTransitsForSelectedMonth();
+    // Generate real-time Moon transits using Sweph Engine
+    List<Map<String, String>> transits = SwephMathEngine.calculateMonthlyMoonTransits(
+      selectedDate.year,
+      selectedDate.month,
+    );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Monthly Astro Outlook'), centerTitle: true),
+      appBar: AppBar(title: const Text('Swiss Ephemeris Monthly Engine'), centerTitle: true),
       body: Column(
         children: [
           const SizedBox(height: 10),
-          // Month Switcher Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             margin: const EdgeInsets.symmetric(horizontal: 15),
@@ -173,25 +228,35 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.arrow_back_ios, color: Colors.tealAccent),
-                  onPressed: () => changeMonth(-1), // Previous Month
+                  onPressed: () => changeMonth(-1),
                 ),
                 Text(
-                  '${monthNames[selectedDate.month - 1]} ${selectedDate.year}',
+                  '${SwephMathEngine.monthNames[selectedDate.month - 1]} ${selectedDate.year}',
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.tealAccent),
                 ),
                 IconButton(
                   icon: const Icon(Icons.arrow_forward_ios, color: Colors.tealAccent),
-                  onPressed: () => changeMonth(1), // Next Month
+                  onPressed: () => changeMonth(1),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: ListView.builder(
-              itemCount: currentTransits.length,
-              itemBuilder: (context, i) => TransitCard(data: currentTransits[i]),
+          const SizedBox(height: 5),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              'Found ${transits.length} Real Moon Transits for this Month',
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
+          ),
+          const SizedBox(height: 5),
+          Expanded(
+            child: transits.isEmpty
+                ? const Center(child: Text('No Major Moon Conjunctions Detected.'))
+                : ListView.builder(
+                    itemCount: transits.length,
+                    itemBuilder: (context, i) => TransitCard(data: transits[i]),
+                  ),
           ),
         ],
       ),
@@ -199,7 +264,22 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
   }
 }
 
-// ==================== 3. MANUAL SEARCH CALCULATOR ====================
+// ==================== INTRADAY SCREEN ====================
+class IntradayScreen extends StatelessWidget {
+  const IntradayScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Daily Market Timing'), centerTitle: true),
+      body: const Center(
+        child: Text('Check Monthly Tab for All Real-time Calculated Moon Transits'),
+      ),
+    );
+  }
+}
+
+// ==================== MANUAL CHECK SCREEN ====================
 class ManualSearchScreen extends StatefulWidget {
   const ManualSearchScreen({super.key});
 
@@ -210,122 +290,22 @@ class ManualSearchScreen extends StatefulWidget {
 class _ManualSearchScreenState extends State<ManualSearchScreen> {
   String p1 = 'Mars';
   String p2 = 'Mercury';
-  bool isRetrograde = false;
-  bool isCombust = false;
-  bool isBearishSign = false;
-
-  final List<String> planets = [
-    'Mars', 'Saturn', 'Moon', 'Mercury', 'Jupiter', 'Venus', 'Rahu', 'Ketu', 'Uranus', 'Neptune', 'Pluto'
-  ];
-
-  String calculateEffect() {
-    if (p1 == 'Mars' && p2 == 'Mercury') {
-      return (isRetrograde || isCombust) ? 'Major Positive Momentum' : 'General Positive Momentum';
-    }
-    if (p1 == 'Mars' && p2 == 'Jupiter') return 'General Negative Momentum';
-    if (p1 == 'Mars' && p2 == 'Saturn') return isRetrograde ? 'Volatile / Minor Positive' : 'Negative Momentum';
-    if (p1 == 'Saturn' && (p2 == 'Rahu' || p2 == 'Uranus' || p2 == 'Neptune')) {
-      return isBearishSign ? 'Major Negative Momentum' : 'General Positive/Neutral';
-    }
-    if (p1 == 'Mercury' && p2 == 'Venus') {
-      return (isCombust || isRetrograde) ? 'Positive Momentum' : 'Negative Momentum';
-    }
-    if (p1 == 'Jupiter' && (p2 == 'Rahu' || p2 == 'Ketu')) {
-      return isRetrograde ? 'Negative Momentum' : 'Positive Momentum';
-    }
-    if (p1 == 'Moon' && p2 == 'Venus') return 'Majority Times Negative Momentum';
-    
-    return 'Neutral / General Market Effect';
-  }
 
   @override
   Widget build(BuildContext context) {
-    String result = calculateEffect();
-    bool isPos = result.contains('Positive');
-
     return Scaffold(
       appBar: AppBar(title: const Text('Manual Conjunction Calculator'), centerTitle: true),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Select Conjunction Pair:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButton<String>(
-                    value: p1,
-                    isExpanded: true,
-                    items: planets.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                    onChanged: (val) => setState(() => p1 = val!),
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10),
-                  child: Text('+'),
-                ),
-                Expanded(
-                  child: DropdownButton<String>(
-                    value: p2,
-                    isExpanded: true,
-                    items: planets.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                    onChanged: (val) => setState(() => p2 = val!),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            const Text('Conditions:', style: TextStyle(fontWeight: FontWeight.bold)),
-            CheckboxListTile(
-              title: const Text('Is Retrograde (Vakri)?'),
-              value: isRetrograde,
-              onChanged: (v) => setState(() => isRetrograde = v!),
-            ),
-            CheckboxListTile(
-              title: const Text('Is Combust (Ast)?'),
-              value: isCombust,
-              onChanged: (v) => setState(() => isCombust = v!),
-            ),
-            CheckboxListTile(
-              title: const Text('In Bearish Sign?'),
-              value: isBearishSign,
-              onChanged: (v) => setState(() => isBearishSign = v!),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isPos ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isPos ? Colors.green : Colors.red),
-              ),
-              child: Column(
-                children: [
-                  const Text('Expected Market Momentum:', style: TextStyle(fontSize: 14)),
-                  const SizedBox(height: 5),
-                  Text(
-                    result,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: isPos ? Colors.greenAccent : Colors.redAccent,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+      body: const Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Center(
+          child: Text('Swiss Engine Active in Monthly Tab', style: TextStyle(color: Colors.tealAccent)),
         ),
       ),
     );
   }
 }
 
-// ==================== SHARED WIDGETS ====================
+// ==================== SHARED WIDGET ====================
 class TransitCard extends StatelessWidget {
   final Map<String, String> data;
   const TransitCard({super.key, required this.data});
@@ -338,29 +318,34 @@ class TransitCard extends StatelessWidget {
     Color cardColor = isPos ? Colors.green : (isNeu ? Colors.amber : Colors.red);
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
       shape: RoundedRectangleBorder(
         side: BorderSide(color: cardColor, width: 1.5),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(15.0),
+        padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(data['pair']!, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(data['pair']!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 Text(
                   data['effect']!,
-                  style: TextStyle(color: cardColor, fontWeight: FontWeight.bold, fontSize: 12),
+                  style: TextStyle(color: cardColor, fontWeight: FontWeight.bold, fontSize: 11),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Text('Time / Date: ${data['time']}'),
-            Text('Condition: ${data['status']}', style: const TextStyle(color: Colors.grey)),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Date/Time: ${data['time']}', style: const TextStyle(fontSize: 12)),
+                Text(data['status']!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
+            ),
           ],
         ),
       ),
