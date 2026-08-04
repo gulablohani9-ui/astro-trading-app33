@@ -62,7 +62,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 class IntradayScreen extends StatelessWidget {
   const IntradayScreen({super.key});
 
-  // Filtered Timings within Market Hours (9:15 AM - 3:30 PM IST)
   final List<Map<String, String>> intradayTransits = const [
     {
       'pair': 'Mars ☌ Mercury',
@@ -99,41 +98,102 @@ class IntradayScreen extends StatelessWidget {
   }
 }
 
-// ==================== 2. MONTHLY SCREEN ====================
-class MonthlyScreen extends StatelessWidget {
+// ==================== 2. MONTHLY SCREEN (WITH DYNAMIC MONTH SWITCHER) ====================
+class MonthlyScreen extends StatefulWidget {
   const MonthlyScreen({super.key});
 
-  final List<Map<String, String>> monthlyTransits = const [
-    {
-      'pair': 'Jupiter ☌ Rahu',
-      'time': 'Aug 1, 2026 - Aug 7, 2026',
-      'status': 'Jupiter Direct',
-      'effect': 'Positive Momentum',
-      'type': 'Positive'
-    },
-    {
-      'pair': 'Mercury ☌ Venus',
-      'time': 'Aug 12, 2026 - Aug 18, 2026',
-      'status': 'Mercury Retrograde',
-      'effect': 'Positive Momentum',
-      'type': 'Positive'
-    },
-    {
-      'pair': 'Uranus ☌ Neptune',
-      'time': 'Aug 20, 2026 - Aug 28, 2026',
-      'status': 'Outer Conjunction',
-      'effect': 'Major Negative Momentum',
-      'type': 'Negative'
-    },
+  @override
+  State<MonthlyScreen> createState() => _MonthlyScreenState();
+}
+
+class _MonthlyScreenState extends State<MonthlyScreen> {
+  DateTime selectedDate = DateTime(2026, 8); // Default: August 2026
+
+  final List<String> monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
   ];
+
+  // Dynamic monthly transits base database
+  List<Map<String, String>> getTransitsForSelectedMonth() {
+    int month = selectedDate.month;
+    int year = selectedDate.year;
+
+    return [
+      {
+        'pair': 'Jupiter ☌ Rahu',
+        'time': '${monthNames[month - 1]} 02, $year - ${monthNames[month - 1]} 08, $year',
+        'status': 'Jupiter Direct',
+        'effect': 'Positive Momentum',
+        'type': 'Positive'
+      },
+      {
+        'pair': 'Mercury ☌ Venus',
+        'time': '${monthNames[month - 1]} 12, $year - ${monthNames[month - 1]} 18, $year',
+        'status': 'Mercury Retrograde',
+        'effect': 'Volatile / Positive Momentum',
+        'type': 'Positive'
+      },
+      {
+        'pair': 'Saturn ☌ Rahu',
+        'time': '${monthNames[month - 1]} 22, $year - ${monthNames[month - 1]} 27, $year',
+        'status': 'Bearish Sign',
+        'effect': 'Major Negative Momentum',
+        'type': 'Negative'
+      },
+    ];
+  }
+
+  void changeMonth(int increment) {
+    setState(() {
+      selectedDate = DateTime(selectedDate.year, selectedDate.month + increment);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    List<Map<String, String>> currentTransits = getTransitsForSelectedMonth();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Monthly Astro Outlook'), centerTitle: true),
-      body: ListView.builder(
-        itemCount: monthlyTransits.length,
-        itemBuilder: (context, i) => TransitCard(data: monthlyTransits[i]),
+      body: Column(
+        children: [
+          const SizedBox(height: 10),
+          // Month Switcher Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            margin: const EdgeInsets.symmetric(horizontal: 15),
+            decoration: BoxDecoration(
+              color: Colors.tealAccent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.tealAccent),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios, color: Colors.tealAccent),
+                  onPressed: () => changeMonth(-1), // Previous Month
+                ),
+                Text(
+                  '${monthNames[selectedDate.month - 1]} ${selectedDate.year}',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.tealAccent),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_forward_ios, color: Colors.tealAccent),
+                  onPressed: () => changeMonth(1), // Next Month
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView.builder(
+              itemCount: currentTransits.length,
+              itemBuilder: (context, i) => TransitCard(data: currentTransits[i]),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -159,7 +219,6 @@ class _ManualSearchScreenState extends State<ManualSearchScreen> {
   ];
 
   String calculateEffect() {
-    // Custom Rulebook Logic Implementation
     if (p1 == 'Mars' && p2 == 'Mercury') {
       return (isRetrograde || isCombust) ? 'Major Positive Momentum' : 'General Positive Momentum';
     }
