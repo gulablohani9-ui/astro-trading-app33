@@ -30,7 +30,7 @@ class MainHomeScreen extends StatefulWidget {
 }
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
-  int _currentIndex = 0;
+  int _currentIndex = 1;
 
   final List<Widget> _screens = [
     const IntradayScreen(),
@@ -58,7 +58,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   }
 }
 
-// ==================== LAHIRI AYANAMSHA + MUMBAI DEFAULT ENGINE ====================
+// ==================== LAHIRI AYANAMSHA + DEDUPLICATED ENGINE ====================
 class LahiriEngine {
   static double getLahiriAyanamsha(double julianDay) {
     double t = (julianDay - 2451545.0) / 36525.0;
@@ -125,7 +125,81 @@ class LahiriEngine {
         1524.5;
   }
 
-  // Calculate Daily Intraday Transits (Mumbai Market Hours: 9:15 AM - 3:30 PM)
+  // Deduplicated Peak Conjunction Detector
+  static List<Map<String, String>> calculateLahiriTransitsClean(int year, int month) {
+    List<Map<String, String>> rawEvents = [];
+    List<String> allPlanets = ['Moon', 'Mars', 'Mercury', 'Venus', 'Jupiter', 'Saturn', 'Rahu', 'Ketu'];
+
+    int daysInMonth = DateTime(year, month + 1, 0).day;
+
+    for (int day = 1; day <= daysInMonth; day++) {
+      for (int hour = 0; hour < 24; hour += 3) {
+        DateTime checkTime = DateTime(year, month, day, hour, 0);
+        double jd = getJulianDayMumbai(checkTime);
+
+        for (int i = 0; i < allPlanets.length; i++) {
+          for (int j = i + 1; j < allPlanets.length; j++) {
+            String p1 = allPlanets[i];
+            String p2 = allPlanets[j];
+
+            if (p1 == 'Rahu' && p2 == 'Ketu') continue;
+
+            double l1 = getPlanetNirayanaLongitude(p1, jd);
+            double l2 = getPlanetNirayanaLongitude(p2, jd);
+            double diff = (l1 - l2).abs();
+
+            if (diff < 2.5 || diff > 357.5) {
+              double exactOrb = diff > 180 ? (360 - diff) : diff;
+
+              String effect = 'Volatile Reversal';
+              String type = 'Neutral';
+
+              if ((p1 == 'Mars' || p2 == 'Mars') && (p1 == 'Mercury' || p2 == 'Mercury')) {
+                effect = 'Major Bullish Momentum';
+                type = 'Positive';
+              } else if ((p1 == 'Saturn' || p2 == 'Saturn') && (p1 == 'Rahu' || p2 == 'Rahu')) {
+                effect = 'Major Bearish Drag';
+                type = 'Negative';
+              }
+
+              String period = hour >= 12 ? 'PM' : 'AM';
+              int displayHour = hour % 12 == 0 ? 12 : hour % 12;
+              String exactTimeStr = "$day ${monthNames[month - 1]} @ ${displayHour.toString().padLeft(2, '0')}:00 $period (IST)";
+
+              rawEvents.add({
+                'pair': '$p1 ☌ $p2',
+                'time': 'Time: $exactTimeStr',
+                'status': 'Orb: ${exactOrb.toStringAsFixed(1)}° (Lahiri)',
+                'effect': effect,
+                'type': type,
+                'dayKey': '$p1-$p2-$day',
+                'orbVal': exactOrb.toString(),
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Filter Out Duplicates (Keep Only Best Minimum Orb per Day)
+    Map<String, Map<String, String>> uniqueMap = {};
+    for (var event in rawEvents) {
+      String key = event['dayKey']!;
+      double currentOrb = double.parse(event['orbVal']!);
+
+      if (!uniqueMap.containsKey(key)) {
+        uniqueMap[key] = event;
+      } else {
+        double existingOrb = double.parse(uniqueMap[key]!['orbVal']!);
+        if (currentOrb < existingOrb) {
+          uniqueMap[key] = event;
+        }
+      }
+    }
+
+    return uniqueMap.values.toList();
+  }
+
   static List<Map<String, String>> calculateDailyIntradayLahiri(DateTime today) {
     List<Map<String, String>> dailyTransits = [];
     
@@ -143,9 +217,9 @@ class LahiriEngine {
     double mercLong = getPlanetNirayanaLongitude('Mercury', jdBull);
 
     dailyTransits.add({
-      'pair': 'Opening Bell (Moon Orb)',
+      'pair': 'Opening Bell Phase',
       'time': timeSlots[0],
-      'status': 'Mumbai Market Opening Phase',
+      'status': 'Mumbai Market Open',
       'effect': (moonLong % 30 < 15) ? 'Positive Opening Push' : 'Volatile Reversal',
       'type': (moonLong % 30 < 15) ? 'Positive' : 'Neutral',
     });
@@ -183,65 +257,6 @@ class LahiriEngine {
     });
 
     return dailyTransits;
-  }
-
-  // Calculate Monthly Transits
-  static List<Map<String, String>> calculateLahiriTransits(int year, int month) {
-    List<Map<String, String>> transits = [];
-    List<String> allPlanets = ['Moon', 'Mars', 'Mercury', 'Venus', 'Jupiter', 'Saturn', 'Rahu', 'Ketu'];
-
-    int daysInMonth = DateTime(year, month + 1, 0).day;
-
-    for (int day = 1; day <= daysInMonth; day++) {
-      for (int hour = 0; hour < 24; hour += 3) {
-        DateTime checkTime = DateTime(year, month, day, hour, 0);
-        double jd = getJulianDayMumbai(checkTime);
-
-        for (int i = 0; i < allPlanets.length; i++) {
-          for (int j = i + 1; j < allPlanets.length; j++) {
-            String p1 = allPlanets[i];
-            String p2 = allPlanets[j];
-
-            if (p1 == 'Rahu' && p2 == 'Ketu') continue;
-
-            double l1 = getPlanetNirayanaLongitude(p1, jd);
-            double l2 = getPlanetNirayanaLongitude(p2, jd);
-            double diff = (l1 - l2).abs();
-
-            if (diff < 3.2 || diff > 356.8) {
-              double exactOrb = diff > 180 ? (360 - diff) : diff;
-
-              String effect = 'Volatile Reversal';
-              String type = 'Neutral';
-
-              if ((p1 == 'Mars' || p2 == 'Mars') && (p1 == 'Mercury' || p2 == 'Mercury')) {
-                effect = 'Major Bullish Momentum';
-                type = 'Positive';
-              } else if ((p1 == 'Saturn' || p2 == 'Saturn') && (p1 == 'Rahu' || p2 == 'Rahu')) {
-                effect = 'Major Bearish Drag';
-                type = 'Negative';
-              }
-
-              String period = hour >= 12 ? 'PM' : 'AM';
-              int displayHour = hour % 12 == 0 ? 12 : hour % 12;
-              String exactTimeStr = "$day ${monthNames[month - 1]} @ ${displayHour.toString().padLeft(2, '0')}:00 $period (IST)";
-
-              if (transits.isEmpty || transits.last['pair'] != '$p1 ☌ $p2' || transits.last['day'] != day.toString()) {
-                transits.add({
-                  'pair': '$p1 ☌ $p2',
-                  'time': 'Time: $exactTimeStr',
-                  'status': 'Orb: ${exactOrb.toStringAsFixed(1)}° (Lahiri)',
-                  'effect': effect,
-                  'type': type,
-                  'day': day.toString(),
-                });
-              }
-            }
-          }
-        }
-      }
-    }
-    return transits;
   }
 
   static const List<String> monthNames = [
@@ -291,7 +306,7 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<Map<String, String>> transits = LahiriEngine.calculateLahiriTransits(
+    List<Map<String, String>> transits = LahiriEngine.calculateLahiriTransitsClean(
       selectedDate.year,
       selectedDate.month,
     );
@@ -329,7 +344,7 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
           ),
           const SizedBox(height: 5),
           Text(
-            'Found ${transits.length} Nirayana Transits (Lahiri System)',
+            'Found ${transits.length} Unique Transits (Deduplicated)',
             style: const TextStyle(color: Colors.grey, fontSize: 12),
           ),
           const SizedBox(height: 5),
