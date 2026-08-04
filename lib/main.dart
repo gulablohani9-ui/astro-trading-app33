@@ -157,7 +157,6 @@ class LahiriEngine {
       }
     }
 
-    // Deduplicate (Keep Minimum Orb per day)
     Map<String, Map<String, String>> uniqueMap = {};
     for (var event in rawEvents) {
       String key = event['dayKey']!;
@@ -314,7 +313,7 @@ class LahiriEngine {
   ];
 }
 
-// ==================== 3. MANUAL SEARCH SCREEN (DYNAMIC PAIR FINDER) ====================
+// ==================== MANUAL SEARCH SCREEN ====================
 class ManualSearchScreen extends StatefulWidget {
   const ManualSearchScreen({super.key});
 
@@ -355,7 +354,6 @@ class _ManualSearchScreenState extends State<ManualSearchScreen> {
         padding: const EdgeInsets.all(15.0),
         child: Column(
           children: [
-            // Dropdowns
             Row(
               children: [
                 Expanded(
@@ -381,8 +379,6 @@ class _ManualSearchScreenState extends State<ManualSearchScreen> {
               ],
             ),
             const SizedBox(height: 12),
-
-            // Month Selector
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
@@ -409,8 +405,6 @@ class _ManualSearchScreenState extends State<ManualSearchScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
-            // Search Button
             SizedBox(
               width: double.infinity,
               height: 45,
@@ -425,8 +419,6 @@ class _ManualSearchScreenState extends State<ManualSearchScreen> {
               ),
             ),
             const SizedBox(height: 15),
-
-            // Results List
             Expanded(
               child: !hasSearched
                   ? const Center(child: Text('Select 2 Planets & Click Calculate', style: TextStyle(color: Colors.grey)))
@@ -460,7 +452,7 @@ class _ManualSearchScreenState extends State<ManualSearchScreen> {
   }
 }
 
-// ==================== 1. DAILY INTRADAY SCREEN ====================
+// ==================== DAILY INTRADAY SCREEN ====================
 class IntradayScreen extends StatelessWidget {
   const IntradayScreen({super.key});
 
@@ -482,7 +474,7 @@ class IntradayScreen extends StatelessWidget {
   }
 }
 
-// ==================== 2. MONTHLY SCREEN ====================
+// ==================== MONTHLY SCREEN ====================
 class MonthlyScreen extends StatefulWidget {
   const MonthlyScreen({super.key});
 
@@ -579,4 +571,9 @@ class TransitCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetw
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(data['pair']!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(
+                  data['effect']!,
+                  
