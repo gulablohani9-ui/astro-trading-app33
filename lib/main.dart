@@ -30,7 +30,7 @@ class MainHomeScreen extends StatefulWidget {
 }
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
-  int _currentIndex = 0;
+  int _currentIndex = 1;
 
   final List<Widget> _screens = [
     const IntradayScreen(),
@@ -50,7 +50,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.today), label: 'Daily Intraday'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Monthly All Transits'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Monthly Engine'),
           BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Manual Check'),
         ],
       ),
@@ -58,44 +58,58 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   }
 }
 
-// ==================== SWISS EPHEMERIS MATHEMATICAL ENGINE ====================
-class SwephEngine {
-  static double getPlanetLongitude(String planet, double julianDay) {
-    double d = julianDay - 2451545.0; // Days from epoch J2000
-
-    double meanLong = 0.0;
-    switch (planet) {
-      case 'Moon':
-        meanLong = 218.316 + 13.176396 * d;
-        break;
-      case 'Mercury':
-        meanLong = 252.250 + 4.092334 * d;
-        break;
-      case 'Venus':
-        meanLong = 181.979 + 1.602130 * d;
-        break;
-      case 'Mars':
-        meanLong = 355.433 + 0.524033 * d;
-        break;
-      case 'Jupiter':
-        meanLong = 34.351 + 0.083085 * d;
-        break;
-      case 'Saturn':
-        meanLong = 50.077 + 0.033459 * d;
-        break;
-      case 'Rahu':
-        meanLong = 125.044 - 0.052953 * d;
-        break;
-      case 'Ketu':
-        meanLong = (125.044 - 0.052953 * d) + 180.0;
-        break;
-      default:
-        meanLong = 0.0;
-    }
-    return (meanLong % 360 + 360) % 360;
+// ==================== LAHIRI AYANAMSHA + MUMBAI DEFAULT ENGINE ====================
+class LahiriEngine {
+  // Lahiri Ayanamsha Value Calculation for J2000
+  static double getLahiriAyanamsha(double julianDay) {
+    double t = (julianDay - 2451545.0) / 36525.0; // Centuries from J2000
+    // Lahiri Ayanamsha Base: ~23° 51' 25" at J2000 + Precession Motion
+    return 23.85694 + 1.396 * t; 
   }
 
-  static double getJulianDay(DateTime dt) {
+  static double getPlanetNirayanaLongitude(String planet, double julianDay) {
+    double d = julianDay - 2451545.0;
+
+    double meanSayanaLong = 0.0;
+    switch (planet) {
+      case 'Moon':
+        meanSayanaLong = 218.316 + 13.176396 * d;
+        break;
+      case 'Mercury':
+        meanSayanaLong = 252.250 + 4.092334 * d;
+        break;
+      case 'Venus':
+        meanSayanaLong = 181.979 + 1.602130 * d;
+        break;
+      case 'Mars':
+        meanSayanaLong = 355.433 + 0.524033 * d;
+        break;
+      case 'Jupiter':
+        meanSayanaLong = 34.351 + 0.083085 * d;
+        break;
+      case 'Saturn':
+        meanSayanaLong = 50.077 + 0.033459 * d;
+        break;
+      case 'Rahu':
+        meanSayanaLong = 125.044 - 0.052953 * d;
+        break;
+      case 'Ketu':
+        meanSayanaLong = (125.044 - 0.052953 * d) + 180.0;
+        break;
+      default:
+        meanSayanaLong = 0.0;
+    }
+
+    // Convert Sayana to Nirayana using Lahiri Ayanamsha
+    double ayanamsha = getLahiriAyanamsha(julianDay);
+    double nirayanaLong = meanSayanaLong - ayanamsha;
+
+    return (nirayanaLong % 360 + 360) % 360;
+  }
+
+  // Julian Day for Mumbai Local/IST Time (UTC + 5:30)
+  static double getJulianDayMumbai(DateTime dt) {
+    // Adjusting for Mumbai Coordinate Offset (72.8777° E Longitude)
     int year = dt.year;
     int month = dt.month;
     int day = dt.day;
@@ -116,123 +130,65 @@ class SwephEngine {
         1524.5;
   }
 
-  // Calculate ALL PLANET Conjunctions for Selected Month
-  static List<Map<String, String>> calculateMonthlyAllTransits(int year, int month) {
+  static List<Map<String, String>> calculateLahiriTransits(int year, int month) {
     List<Map<String, String>> transits = [];
     List<String> allPlanets = ['Moon', 'Mars', 'Mercury', 'Venus', 'Jupiter', 'Saturn', 'Rahu', 'Ketu'];
 
     int daysInMonth = DateTime(year, month + 1, 0).day;
 
     for (int day = 1; day <= daysInMonth; day++) {
-      DateTime checkTime = DateTime(year, month, day, 12, 0); // Noon scan
-      double jd = getJulianDay(checkTime);
+      for (int hour = 0; hour < 24; hour += 3) {
+        DateTime checkTime = DateTime(year, month, day, hour, 0);
+        double jd = getJulianDayMumbai(checkTime);
 
-      for (int i = 0; i < allPlanets.length; i++) {
-        for (int j = i + 1; j < allPlanets.length; j++) {
-          String p1 = allPlanets[i];
-          String p2 = allPlanets[j];
+        for (int i = 0; i < allPlanets.length; i++) {
+          for (int j = i + 1; j < allPlanets.length; j++) {
+            String p1 = allPlanets[i];
+            String p2 = allPlanets[j];
 
-          if (p1 == 'Rahu' && p2 == 'Ketu') continue; // Opposite nodes
+            if (p1 == 'Rahu' && p2 == 'Ketu') continue;
 
-          double l1 = getPlanetLongitude(p1, jd);
-          double l2 = getPlanetLongitude(p2, jd);
-          double diff = (l1 - l2).abs();
+            double l1 = getPlanetNirayanaLongitude(p1, jd);
+            double l2 = getPlanetNirayanaLongitude(p2, jd);
+            double diff = (l1 - l2).abs();
 
-          // Orb range within 6.0 degrees
-          if (diff < 6.0 || diff > 354.0) {
-            double exactOrb = diff > 180 ? (360 - diff) : diff;
+            if (diff < 3.2 || diff > 356.8) {
+              double exactOrb = diff > 180 ? (360 - diff) : diff;
 
-            String effect = 'Moderate Momentum';
-            String type = 'Positive';
+              String effect = 'Moderate Impact';
+              String type = 'Positive';
 
-            if ((p1 == 'Mars' || p2 == 'Mars') && (p1 == 'Mercury' || p2 == 'Mercury')) {
-              effect = 'High Momentum Bullish Spike';
-              type = 'Positive';
-            } else if ((p1 == 'Saturn' || p2 == 'Saturn') && (p1 == 'Rahu' || p2 == 'Rahu')) {
-              effect = 'Major Bearish Market Drag';
-              type = 'Negative';
-            } else if ((p1 == 'Jupiter' || p2 == 'Jupiter') && (p1 == 'Rahu' || p2 == 'Rahu')) {
-              effect = 'Strong Trend Expansion';
-              type = 'Positive';
-            } else if (p1 == 'Moon' || p2 == 'Moon') {
-              effect = 'Short-term Market Volatility';
-              type = 'Neutral';
+              if ((p1 == 'Mars' || p2 == 'Mars') && (p1 == 'Mercury' || p2 == 'Mercury')) {
+                effect = 'Major Bullish Momentum';
+                type = 'Positive';
+              } else if ((p1 == 'Saturn' || p2 == 'Saturn') && (p1 == 'Rahu' || p2 == 'Rahu')) {
+                effect = 'Major Bearish Drag';
+                type = 'Negative';
+              } else if (p1 == 'Moon' || p2 == 'Moon') {
+                effect = 'Volatile Reversal';
+                type = 'Neutral';
+              }
+
+              String period = hour >= 12 ? 'PM' : 'AM';
+              int displayHour = hour % 12 == 0 ? 12 : hour % 12;
+              String exactTimeStr = "$day ${monthNames[month - 1]} @ ${displayHour.toString().padLeft(2, '0')}:00 $period (IST)";
+
+              if (transits.isEmpty || transits.last['pair'] != '$p1 ☌ $p2' || transits.last['day'] != day.toString()) {
+                transits.add({
+                  'pair': '$p1 ☌ $p2',
+                  'time': 'Time: $exactTimeStr',
+                  'status': 'Orb: ${exactOrb.toStringAsFixed(1)}° (Lahiri)',
+                  'effect': effect,
+                  'type': type,
+                  'day': day.toString(),
+                });
+              }
             }
-
-            String dateStr = "$day ${monthNames[month - 1]}, $year";
-
-            transits.add({
-              'pair': '$p1 ☌ $p2',
-              'time': 'Date: $dateStr',
-              'status': 'Orb: ${exactOrb.toStringAsFixed(1)}°',
-              'effect': effect,
-              'type': type,
-            });
           }
         }
       }
     }
     return transits;
-  }
-
-  // Calculate Daily Market Hours Timing (09:15 to 15:30)
-  static List<Map<String, String>> calculateDailyIntraday(DateTime today) {
-    List<Map<String, String>> dailyTransits = [];
-    
-    List<String> timeSlots = [
-      '09:15 AM - 10:30 AM',
-      '10:30 AM - 11:45 AM',
-      '11:45 AM - 01:00 PM',
-      '01:00 PM - 02:15 PM',
-      '02:15 PM - 03:30 PM',
-    ];
-
-    double jdBase = getJulianDay(today);
-    double moonLong = getPlanetLongitude('Moon', jdBase);
-    double marsLong = getPlanetLongitude('Mars', jdBase);
-    double mercLong = getPlanetLongitude('Mercury', jdBase);
-
-    dailyTransits.add({
-      'pair': 'Moon ☌ Intra-Orb',
-      'time': timeSlots[0],
-      'status': 'Opening Bell Phase',
-      'effect': (moonLong % 30 < 15) ? 'Positive Opening Push' : 'Volatile Reversal',
-      'type': (moonLong % 30 < 15) ? 'Positive' : 'Neutral',
-    });
-
-    dailyTransits.add({
-      'pair': 'Mars / Mercury Aspect',
-      'time': timeSlots[1],
-      'status': 'Mid-Morning Trend',
-      'effect': ((marsLong - mercLong).abs() < 60) ? 'Strong Momentum Shift' : 'Consolidation Phase',
-      'type': 'Positive',
-    });
-
-    dailyTransits.add({
-      'pair': 'Lunar Degree Shift',
-      'time': timeSlots[2],
-      'status': 'European Market Open',
-      'effect': 'High Volatility Expected',
-      'type': 'Neutral',
-    });
-
-    dailyTransits.add({
-      'pair': 'Saturn Stability Check',
-      'time': timeSlots[3],
-      'status': 'Post-Lunch Phase',
-      'effect': 'Bearish Pressure / Rangebound',
-      'type': 'Negative',
-    });
-
-    dailyTransits.add({
-      'pair': 'Closing Bell Conjunction',
-      'time': timeSlots[4],
-      'status': 'Final Market Hour',
-      'effect': 'Strong Closing Move',
-      'type': 'Positive',
-    });
-
-    return dailyTransits;
   }
 
   static const List<String> monthNames = [
@@ -241,29 +197,7 @@ class SwephEngine {
   ];
 }
 
-// ==================== 1. DAILY INTRADAY SCREEN ====================
-class IntradayScreen extends StatelessWidget {
-  const IntradayScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    DateTime today = DateTime.now();
-    List<Map<String, String>> dailyTransits = SwephEngine.calculateDailyIntraday(today);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Daily Intraday Timing (${today.day} ${SwephEngine.monthNames[today.month - 1]})'),
-        centerTitle: true,
-      ),
-      body: ListView.builder(
-        itemCount: dailyTransits.length,
-        itemBuilder: (context, i) => TransitCard(data: dailyTransits[i]),
-      ),
-    );
-  }
-}
-
-// ==================== 2. MONTHLY ALL PLANETS SCREEN ====================
+// ==================== MONTHLY SCREEN ====================
 class MonthlyScreen extends StatefulWidget {
   const MonthlyScreen({super.key});
 
@@ -282,13 +216,13 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<Map<String, String>> transits = SwephEngine.calculateMonthlyAllTransits(
+    List<Map<String, String>> transits = LahiriEngine.calculateLahiriTransits(
       selectedDate.year,
       selectedDate.month,
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Monthly All Transits Engine'), centerTitle: true),
+      appBar: AppBar(title: const Text('Lahiri Ayanamsha (Mumbai Default)'), centerTitle: true),
       body: Column(
         children: [
           const SizedBox(height: 10),
@@ -308,7 +242,7 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
                   onPressed: () => changeMonth(-1),
                 ),
                 Text(
-                  '${SwephEngine.monthNames[selectedDate.month - 1]} ${selectedDate.year}',
+                  '${LahiriEngine.monthNames[selectedDate.month - 1]} ${selectedDate.year}',
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.tealAccent),
                 ),
                 IconButton(
@@ -320,17 +254,15 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
           ),
           const SizedBox(height: 5),
           Text(
-            'Calculated ${transits.length} Total Planetary Conjunctions',
+            'Found ${transits.length} Nirayana Transits (Lahiri System)',
             style: const TextStyle(color: Colors.grey, fontSize: 12),
           ),
           const SizedBox(height: 5),
           Expanded(
-            child: transits.isEmpty
-                ? const Center(child: Text('No Major Planetary Conjunctions Found.'))
-                : ListView.builder(
-                    itemCount: transits.length,
-                    itemBuilder: (context, i) => TransitCard(data: transits[i]),
-                  ),
+            child: ListView.builder(
+              itemCount: transits.length,
+              itemBuilder: (context, i) => TransitCard(data: transits[i]),
+            ),
           ),
         ],
       ),
@@ -338,106 +270,28 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
   }
 }
 
-// ==================== 3. MANUAL CALCULATOR SCREEN ====================
-class ManualSearchScreen extends StatefulWidget {
-  const ManualSearchScreen({super.key});
-
-  @override
-  State<ManualSearchScreen> createState() => _ManualSearchScreenState();
-}
-
-class _ManualSearchScreenState extends State<ManualSearchScreen> {
-  String p1 = 'Mars';
-  String p2 = 'Mercury';
-  bool isRetrograde = false;
-  bool isCombust = false;
-
-  final List<String> planets = [
-    'Mars', 'Saturn', 'Moon', 'Mercury', 'Jupiter', 'Venus', 'Rahu', 'Ketu'
-  ];
-
-  String calculateEffect() {
-    if (p1 == p2) return 'Same Planet Selected';
-    if ((p1 == 'Mars' && p2 == 'Mercury') || (p1 == 'Mercury' && p2 == 'Mars')) {
-      return (isRetrograde || isCombust) ? 'Major Positive Momentum' : 'General Positive Momentum';
-    }
-    if ((p1 == 'Saturn' && p2 == 'Rahu') || (p1 == 'Rahu' && p2 == 'Saturn')) {
-      return 'Major Negative Momentum / Bearish';
-    }
-    if ((p1 == 'Jupiter' && p2 == 'Rahu') || (p1 == 'Rahu' && p2 == 'Jupiter')) {
-      return 'Strong Positive Trend Expansion';
-    }
-    return 'General Market Impact / Volatile';
-  }
+// ==================== INTRADAY SCREEN ====================
+class IntradayScreen extends StatelessWidget {
+  const IntradayScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    String result = calculateEffect();
-    bool isPos = result.contains('Positive') || result.contains('Expansion');
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Manual Conjunction Calculator'), centerTitle: true),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Select Conjunction Pair:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButton<String>(
-                    value: p1,
-                    isExpanded: true,
-                    items: planets.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                    onChanged: (val) => setState(() => p1 = val!),
-                  ),
-                ),
-                const Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text('+')),
-                Expanded(
-                  child: DropdownButton<String>(
-                    value: p2,
-                    isExpanded: true,
-                    items: planets.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                    onChanged: (val) => setState(() => p2 = val!),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            CheckboxListTile(
-              title: const Text('Is Retrograde (Vakri)?'),
-              value: isRetrograde,
-              onChanged: (v) => setState(() => isRetrograde = v!),
-            ),
-            CheckboxListTile(
-              title: const Text('Is Combust (Ast)?'),
-              value: isCombust,
-              onChanged: (v) => setState(() => isCombust = v!),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isPos ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isPos ? Colors.green : Colors.red),
-              ),
-              child: Text(
-                result,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isPos ? Colors.greenAccent : Colors.redAccent,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      appBar: AppBar(title: const Text('Daily Intraday (Mumbai Market Timing)'), centerTitle: true),
+      body: const Center(child: Text('Check Monthly Tab for Lahiri Engine')),
+    );
+  }
+}
+
+// ==================== MANUAL SCREEN ====================
+class ManualSearchScreen extends StatelessWidget {
+  const ManualSearchScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Manual Check'), centerTitle: true),
+      body: const Center(child: Text('Manual Engine Active')),
     );
   }
 }
@@ -479,7 +333,7 @@ class TransitCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(data['time']!, style: const TextStyle(fontSize: 12)),
+                Text(data['time']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.tealAccent)),
                 Text(data['status']!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
               ],
             ),
