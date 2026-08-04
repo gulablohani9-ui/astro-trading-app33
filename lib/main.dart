@@ -62,13 +62,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 class LahiriEngine {
   static double getLahiriAyanamsha(double julianDay) {
     double t = (julianDay - 2451545.0) / 36525.0;
-    return 23.85694 + 1.396 * t; 
+    return 23.85694 + 1.396 * t;
   }
 
   static double getPlanetNirayanaLongitude(String planet, double julianDay) {
     double d = julianDay - 2451545.0;
-
     double meanSayanaLong = 0.0;
+
     switch (planet) {
       case 'Moon':
         meanSayanaLong = 218.316 + 13.176396 * d;
@@ -100,7 +100,6 @@ class LahiriEngine {
 
     double ayanamsha = getLahiriAyanamsha(julianDay);
     double nirayanaLong = meanSayanaLong - ayanamsha;
-
     return (nirayanaLong % 360 + 360) % 360;
   }
 
@@ -125,7 +124,6 @@ class LahiriEngine {
         1524.5;
   }
 
-  // CUSTOM PAIR SEARCH ENGINE
   static List<Map<String, String>> searchSpecificPairTransits(String p1, String p2, int year, int month) {
     List<Map<String, String>> rawEvents = [];
     int daysInMonth = DateTime(year, month + 1, 0).day;
@@ -250,7 +248,6 @@ class LahiriEngine {
 
   static List<Map<String, String>> calculateDailyIntradayLahiri(DateTime today) {
     List<Map<String, String>> dailyTransits = [];
-    
     List<String> timeSlots = [
       '09:15 AM - 10:30 AM',
       '10:30 AM - 11:45 AM',
@@ -573,7 +570,24 @@ class TransitCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(data['pair']!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(data['pair'] ?? '', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 Text(
-                  data['effect']!,
-                  
+                  data['effect'] ?? '',
+                  style: TextStyle(color: cardColor, fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(data['time'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.tealAccent)),
+                Text(data['status'] ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
