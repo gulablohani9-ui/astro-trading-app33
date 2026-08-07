@@ -1,0 +1,703 @@
+name: Build Astro Degree Alert Pro APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.x'
+          channel: 'stable'
+
+      - name: Generate Custom Astro Degree Alert Structure
+        run: |
+          rm -rf lib
+          flutter create --template=app --org=com.astro.degreealert --project-name=astro_degree_alert_pro . --overwrite
+          
+          cat << 'EOF' > pubspec.yaml
+          name: astro_degree_alert_pro
+          description: Custom Natal vs Transit Degree Trigger Engine
+          publish_to: 'none'
+          version: 1.0.0+1
+
+          environment:
+            sdk: '>=3.0.0 <4.0.0'
+
+          dependencies:
+            flutter:
+              sdk: flutter
+
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+
+          flutter:
+            uses-material-design: true
+          EOF
+
+          mkdir -p lib
+          cat << 'EOF' > lib/main.dart
+import 'dart:async';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const AstroDegreeAlertApp());
+}
+
+class AstroDegreeAlertApp extends StatelessWidget {
+  const AstroDegreeAlertApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Astro Degree Alert Pro',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        primaryColor: Colors.tealAccent,
+        cardColor: const Color(0xFF1E1E1E),
+        colorScheme: const ColorScheme.dark(
+          primary: Colors.tealAccent,
+          surface: Color(0xFF1E1E1E),
+        ),
+      ),
+      home: const MainHomeScreen(),
+    );
+  }
+}
+
+class MainHomeScreen extends StatefulWidget {
+  const MainHomeScreen({super.key});
+
+  @override
+  State<MainHomeScreen> createState() => _MainHomeScreenState();
+}
+
+class _MainHomeScreenState extends State<MainHomeScreen> {
+  int _currentIndex = 0;
+  DateTime selectedDate = DateTime.now();
+
+  // Manual Natal Degrees (User Inputs)
+  Map<String, double> natalDegrees = {
+    'Moon': 120.0,
+    'Sun': 45.0,
+    'Rahu': 15.0,
+    'Ketu': 195.0,
+    'Jupiter': 80.0,
+    'Saturn': 210.0,
+    'Mars': 140.0,
+    'Mercury': 60.0,
+  };
+
+  // Manual Trigger Degree Thresholds (Offsets)
+  double moonToMoonOffset = 20.0;
+  double moonToKetuOffset = 5.0;
+  double moonToRahuOffset = 20.0;
+  double sunAspectOffset = 5.0;
+  double otherPlanetOffset = 5.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> screens = [
+      DailyDegreeTimelineScreen(
+        selectedDate: selectedDate,
+        natalDegrees: natalDegrees,
+        moonToMoonOffset: moonToMoonOffset,
+        moonToKetuOffset: moonToKetuOffset,
+        moonToRahuOffset: moonToRahuOffset,
+        sunAspectOffset: sunAspectOffset,
+        otherPlanetOffset: otherPlanetOffset,
+        onDateSelected: (dt) => setState(() => selectedDate = dt),
+      ),
+      MonthlyDegreeCalendarScreen(
+        natalDegrees: natalDegrees,
+        moonToMoonOffset: moonToMoonOffset,
+        moonToKetuOffset: moonToKetuOffset,
+        moonToRahuOffset: moonToRahuOffset,
+        sunAspectOffset: sunAspectOffset,
+        otherPlanetOffset: otherPlanetOffset,
+        onDateSelected: (dt) {
+          setState(() {
+            selectedDate = dt;
+            _currentIndex = 0;
+          });
+        },
+      ),
+      NatalDegreeSettingsScreen(
+        natalDegrees: natalDegrees,
+        moonToMoonOffset: moonToMoonOffset,
+        moonToKetuOffset: moonToKetuOffset,
+        moonToRahuOffset: moonToRahuOffset,
+        sunAspectOffset: sunAspectOffset,
+        otherPlanetOffset: otherPlanetOffset,
+        onSave: (updatedNatal, mToM, mToK, mToR, sunOff, otherOff) {
+          setState(() {
+            natalDegrees = updatedNatal;
+            moonToMoonOffset = mToM;
+            moonToKetuOffset = mToK;
+            moonToRahuOffset = mToR;
+            sunAspectOffset = sunOff;
+            otherPlanetOffset = otherOff;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Natal Degrees & Offsets Saved Successfully!')),
+          );
+        },
+      ),
+    ];
+
+    return Scaffold(
+      body: screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        selectedItemColor: Colors.tealAccent,
+        unselectedItemColor: Colors.grey,
+        backgroundColor: const Color(0xFF1F1F1F),
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: 'Daily Alerts'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Monthly Calendar'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Input Degrees'),
+        ],
+      ),
+    );
+  }
+}
+
+class AstroDegreeCalculator {
+  static double getJulianDay(DateTime dt) {
+    int y = dt.year;
+    int m = dt.month;
+    int d = dt.day;
+    double h = dt.hour + (dt.minute / 60.0);
+
+    if (m <= 2) {
+      y -= 1;
+      m += 12;
+    }
+    int a = y ~/ 100;
+    int b = 2 - a + (a ~/ 4);
+
+    return (365.25 * (y + 4716)).floor() + (30.6001 * (m + 1)).floor() + d + (h / 24.0) + b - 1524.5;
+  }
+
+  static double getLahiriAyanamsha(double jd) {
+    double t = (jd - 2451545.0) / 36525.0;
+    return 23.85694 + 1.396 * t;
+  }
+
+  static double getTransitLongitude(String planet, double jd) {
+    double d = jd - 2451545.0;
+    double meanLong = 0.0;
+
+    switch (planet) {
+      case 'Sun': meanLong = 280.46646 + 0.98564736 * d; break;
+      case 'Moon': meanLong = 218.3165 + 13.176396 * d; break;
+      case 'Mercury': meanLong = 252.2509 + 4.092334 * d; break;
+      case 'Venus': meanLong = 181.9798 + 1.602130 * d; break;
+      case 'Mars': meanLong = 355.4330 + 0.524033 * d; break;
+      case 'Jupiter': meanLong = 34.3515 + 0.083085 * d; break;
+      case 'Saturn': meanLong = 50.0774 + 0.033459 * d; break;
+      case 'Rahu': meanLong = 125.0445 - 0.052953 * d; break;
+      case 'Ketu': meanLong = (125.0445 - 0.052953 * d) + 180.0; break;
+      default: meanLong = 0.0;
+    }
+
+    double ayanamsha = getLahiriAyanamsha(jd);
+    double nirayanaLong = (meanLong - ayanamsha) % 360;
+    return (nirayanaLong < 0) ? nirayanaLong + 360 : nirayanaLong;
+  }
+
+  // Check 1-5-9 Aspect Angle (0°, 120°, 240° Relative Distance)
+  static bool is159Aspect(double transitDeg, double natalDeg, double offsetDegrees, outDistance) {
+    double diff = (transitDeg - natalDeg).abs() % 360;
+    if (diff > 180) diff = 360 - diff;
+
+    double dist0 = diff;
+    double dist120 = (diff - 120).abs();
+    double dist240 = (diff - 240).abs();
+
+    double minDistance = [dist0, dist120, dist240].reduce((a, b) => a < b ? a : b);
+    outDistance[0] = minDistance;
+
+    return minDistance <= offsetDegrees;
+  }
+
+  static List<Map<String, String>> calculateDailyTriggers(
+    DateTime date,
+    Map<String, double> natalDegrees,
+    double mToMOffset,
+    double mToKOffset,
+    double mToROffset,
+    double sunOffset,
+    double otherOffset,
+  ) {
+    List<Map<String, String>> alerts = [];
+    List<String> planetsToScan = ['Moon', 'Sun', 'Jupiter', 'Saturn', 'Mars', 'Mercury'];
+
+    for (int hour = 6; hour <= 22; hour += 2) {
+      DateTime dt = DateTime(date.year, date.month, date.day, hour, 0);
+      double jd = getJulianDay(dt);
+
+      for (var planet in planetsToScan) {
+        double transitLong = getTransitLongitude(planet, jd);
+        List<double> distBox = [0.0];
+
+        if (planet == 'Moon') {
+          // Rule 1: Transit Moon -> Natal Moon (1-5-9) BUY
+          if (is159Aspect(transitLong, natalDegrees['Moon']!, mToMOffset, distBox)) {
+            alerts.add({
+              'time': '${hour.toString().padLeft(2, '0')}:00 IST',
+              'type': 'BUY',
+              'title': 'Transit Moon 1-5-9 Natal Moon',
+              'desc': 'BUY Trigger Active (${distBox[0].toStringAsFixed(2)}° away from Natal Moon)',
+              'dist': '${distBox[0].toStringAsFixed(2)}° Away',
+            });
+          }
+          // Rule 2: Transit Moon -> Natal Ketu (1-5-9) BUY
+          if (is159Aspect(transitLong, natalDegrees['Ketu']!, mToKOffset, distBox)) {
+            alerts.add({
+              'type': 'BUY',
+              'time': '${hour.toString().padLeft(2, '0')}:00 IST',
+              'title': 'Transit Moon 1-5-9 Natal Ketu',
+              'desc': 'BUY Trigger Active (${distBox[0].toStringAsFixed(2)}° away from Natal Ketu)',
+              'dist': '${distBox[0].toStringAsFixed(2)}° Away',
+            });
+          }
+          // Rule 3: Transit Moon -> Natal Rahu (1-5-9) SELL
+          if (is159Aspect(transitLong, natalDegrees['Rahu']!, mToROffset, distBox)) {
+            alerts.add({
+              'type': 'SELL',
+              'time': '${hour.toString().padLeft(2, '0')}:00 IST',
+              'title': 'Transit Moon 1-5-9 Natal Rahu',
+              'desc': 'SELL Trigger Active (${distBox[0].toStringAsFixed(2)}° away from Natal Rahu)',
+              'dist': '${distBox[0].toStringAsFixed(2)}° Away',
+            });
+          }
+        } else if (planet == 'Sun') {
+          // Rule 4: Sun 1-5-9 Aspect with Natal Sun, Ketu, Rahu
+          if (is159Aspect(transitLong, natalDegrees['Sun']!, sunOffset, distBox)) {
+            alerts.add({
+              'type': 'ALERT',
+              'time': '${hour.toString().padLeft(2, '0')}:00 IST',
+              'title': 'Transit Sun 1-5-9 Natal Sun',
+              'desc': 'Solar Aspect Active (${distBox[0].toStringAsFixed(2)}° away)',
+              'dist': '${distBox[0].toStringAsFixed(2)}° Away',
+            });
+          }
+          if (is159Aspect(transitLong, natalDegrees['Ketu']!, sunOffset, distBox)) {
+            alerts.add({
+              'type': 'ALERT',
+              'time': '${hour.toString().padLeft(2, '0')}:00 IST',
+              'title': 'Transit Sun 1-5-9 Natal Ketu',
+              'desc': 'Solar Ketu Alert (${distBox[0].toStringAsFixed(2)}° away)',
+              'dist': '${distBox[0].toStringAsFixed(2)}° Away',
+            });
+          }
+          if (is159Aspect(transitLong, natalDegrees['Rahu']!, sunOffset, distBox)) {
+            alerts.add({
+              'type': 'ALERT',
+              'time': '${hour.toString().padLeft(2, '0')}:00 IST',
+              'title': 'Transit Sun 1-5-9 Natal Rahu',
+              'desc': 'Solar Rahu Alert (${distBox[0].toStringAsFixed(2)}° away)',
+              'dist': '${distBox[0].toStringAsFixed(2)}° Away',
+            });
+          }
+        } else {
+          // Same rules for Jupiter, Saturn, Mars, Mercury vs Natal Planets
+          if (is159Aspect(transitLong, natalDegrees[planet]!, otherOffset, distBox)) {
+            alerts.add({
+              'type': 'ALERT',
+              'time': '${hour.toString().padLeft(2, '0')}:00 IST',
+              'title': 'Transit $planet 1-5-9 Natal $planet',
+              'desc': '$planet Aspect Active (${distBox[0].toStringAsFixed(2)}° away)',
+              'dist': '${distBox[0].toStringAsFixed(2)}° Away',
+            });
+          }
+        }
+      }
+    }
+
+    // Deduplicate
+    Map<String, Map<String, String>> uniqueAlerts = {};
+    for (var a in alerts) {
+      uniqueAlerts["${a['title']}_${a['time']}"] = a;
+    }
+
+    return uniqueAlerts.values.toList();
+  }
+}
+
+class DailyDegreeTimelineScreen extends StatelessWidget {
+  final DateTime selectedDate;
+  final Map<String, double> natalDegrees;
+  final double moonToMoonOffset;
+  final double moonToKetuOffset;
+  final double moonToRahuOffset;
+  final double sunAspectOffset;
+  final double otherPlanetOffset;
+  final Function(DateTime) onDateSelected;
+
+  const DailyDegreeTimelineScreen({
+    super.key,
+    required this.selectedDate,
+    required this.natalDegrees,
+    required this.moonToMoonOffset,
+    required this.moonToKetuOffset,
+    required this.moonToRahuOffset,
+    required this.sunAspectOffset,
+    required this.otherPlanetOffset,
+    required this.onDateSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    List<Map<String, String>> alerts = AstroDegreeCalculator.calculateDailyTriggers(
+      selectedDate,
+      natalDegrees,
+      moonToMoonOffset,
+      moonToKetuOffset,
+      moonToRahuOffset,
+      sunAspectOffset,
+      otherPlanetOffset,
+    );
+
+    String formattedDate = "${selectedDate.day}/${selectedDate.month}/${selectedDate.year}";
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Custom Degree Alert Engine'), centerTitle: true),
+      body: Column(
+        children: [
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 15.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text("Daily Degree Distance", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.tealAccent)),
+                    Text("1-5-9 Aspect Offsets Active", style: TextStyle(color: Colors.grey, fontSize: 11)),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2A2A2A), foregroundColor: Colors.tealAccent),
+                  onPressed: () async {
+                    DateTime? picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                    );
+                    if (picked != null) onDateSelected(picked);
+                  },
+                  icon: const Icon(Icons.calendar_month, size: 18),
+                  label: Text(formattedDate, style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: alerts.isEmpty
+                ? Center(
+                    child: Text(
+                      "No Degree Threshold Triggered on $formattedDate\n(Planets Outside Offset Limits)",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: alerts.length,
+                    itemBuilder: (context, i) {
+                      var alert = alerts[i];
+                      bool isBuy = alert['type'] == 'BUY';
+                      bool isSell = alert['type'] == 'SELL';
+                      Color color = isBuy ? Colors.greenAccent : (isSell ? Colors.redAccent : Colors.amberAccent);
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
+                        shape: RoundedRectangleBorder(side: BorderSide(color: color, width: 1.5), borderRadius: BorderRadius.circular(10)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(alert['time']!, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.tealAccent)),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(5)),
+                                    child: Row(
+                                      children: [
+                                        Icon(isBuy ? Icons.shopping_cart : (isSell ? Icons.sell : Icons.notifications), size: 14, color: color),
+                                        const SizedBox(width: 4),
+                                        Text(alert['type']!, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(alert['title']!, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text(alert['desc']!, style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                              const SizedBox(height: 6),
+                              Text("Distance: ${alert['dist']!}", style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class MonthlyDegreeCalendarScreen extends StatefulWidget {
+  final Map<String, double> natalDegrees;
+  final double moonToMoonOffset;
+  final double moonToKetuOffset;
+  final double moonToRahuOffset;
+  final double sunAspectOffset;
+  final double otherPlanetOffset;
+  final Function(DateTime) onDateSelected;
+
+  const MonthlyDegreeCalendarScreen({
+    super.key,
+    required this.natalDegrees,
+    required this.moonToMoonOffset,
+    required this.moonToKetuOffset,
+    required this.moonToRahuOffset,
+    required this.sunAspectOffset,
+    required this.otherPlanetOffset,
+    required this.onDateSelected,
+  });
+
+  @override
+  State<MonthlyDegreeCalendarScreen> createState() => _MonthlyDegreeCalendarScreenState();
+}
+
+class _MonthlyDegreeCalendarScreenState extends State<MonthlyDegreeCalendarScreen> {
+  DateTime currentMonth = DateTime.now();
+
+  @override
+  Widget build(BuildContext context) {
+    int daysInMonth = DateTime(currentMonth.year, currentMonth.month + 1, 0).day;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Monthly Alert Calendar'), centerTitle: true),
+      body: Column(
+        children: [
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios, color: Colors.tealAccent),
+                onPressed: () => setState(() => currentMonth = DateTime(currentMonth.year, currentMonth.month - 1)),
+              ),
+              Text("${currentMonth.month}/${currentMonth.year}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.tealAccent)),
+              IconButton(
+                icon: const Icon(Icons.arrow_forward_ios, color: Colors.tealAccent),
+                onPressed: () => setState(() => currentMonth = DateTime(currentMonth.year, currentMonth.month + 1)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.all(12),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, childAspectRatio: 0.9, crossAxisSpacing: 8, mainAxisSpacing: 8),
+              itemCount: daysInMonth,
+              itemBuilder: (context, index) {
+                int day = index + 1;
+                DateTime date = DateTime(currentMonth.year, currentMonth.month, day);
+                var alerts = AstroDegreeCalculator.calculateDailyTriggers(
+                  date,
+                  widget.natalDegrees,
+                  widget.moonToMoonOffset,
+                  widget.moonToKetuOffset,
+                  widget.moonToRahuOffset,
+                  widget.sunAspectOffset,
+                  widget.otherPlanetOffset,
+                );
+
+                bool hasBuy = alerts.any((a) => a['type'] == 'BUY');
+                bool hasSell = alerts.any((a) => a['type'] == 'SELL');
+                Color cellColor = hasBuy ? Colors.greenAccent : (hasSell ? Colors.redAccent : (alerts.isNotEmpty ? Colors.amberAccent : const Color(0xFF1E1E1E)));
+
+                return GestureDetector(
+                  onTap: () => widget.onDateSelected(date),
+                  child: Container(
+                    decoration: BoxDecoration(color: cellColor.withOpacity(0.15), borderRadius: BorderRadius.circular(8), border: Border.all(color: cellColor)),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("$day", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        if (alerts.isNotEmpty)
+                          Text("${alerts.length} Trigger", style: TextStyle(color: cellColor, fontSize: 9, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class NatalDegreeSettingsScreen extends StatefulWidget {
+  final Map<String, double> natalDegrees;
+  final double moonToMoonOffset;
+  final double moonToKetuOffset;
+  final double moonToRahuOffset;
+  final double sunAspectOffset;
+  final double otherPlanetOffset;
+  final Function(Map<String, double>, double, double, double, double, double) onSave;
+
+  const NatalDegreeSettingsScreen({
+    super.key,
+    required this.natalDegrees,
+    required this.moonToMoonOffset,
+    required this.moonToKetuOffset,
+    required this.moonToRahuOffset,
+    required this.sunAspectOffset,
+    required this.otherPlanetOffset,
+    required this.onSave,
+  });
+
+  @override
+  State<NatalDegreeSettingsScreen> createState() => _NatalDegreeSettingsScreenState();
+}
+
+class _NatalDegreeSettingsScreenState extends State<NatalDegreeSettingsScreen> {
+  late Map<String, TextEditingController> _controllers;
+  late TextEditingController _mToMCtrl;
+  late TextEditingController _mToKCtrl;
+  late TextEditingController _mToRCtrl;
+  late TextEditingController _sunCtrl;
+  late TextEditingController _otherCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = {};
+    widget.natalDegrees.forEach((key, value) {
+      _controllers[key] = TextEditingController(text: value.toString());
+    });
+
+    _mToMCtrl = TextEditingController(text: widget.moonToMoonOffset.toString());
+    _mToKCtrl = TextEditingController(text: widget.moonToKetuOffset.toString());
+    _mToRCtrl = TextEditingController(text: widget.moonToRahuOffset.toString());
+    _sunCtrl = TextEditingController(text: widget.sunAspectOffset.toString());
+    _otherCtrl = TextEditingController(text: widget.otherPlanetOffset.toString());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Input Natal Degrees & Offsets'), centerTitle: true),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("1. Enter Your Natal Planet Degrees (0°-360°)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.tealAccent)),
+            const SizedBox(height: 10),
+            ...widget.natalDegrees.keys.map((p) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: TextField(
+                  controller: _controllers[p],
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Natal $p Degree',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              );
+            }).toList(),
+            const SizedBox(height: 20),
+            const Text("2. Custom Trigger Offsets (Degrees Before Aspect)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.tealAccent)),
+            const SizedBox(height: 10),
+            TextField(controller: _mToMCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Moon -> Natal Moon (Default: 20° BUY)', border: OutlineInputBorder(), isDense: true)),
+            const SizedBox(height: 8),
+            TextField(controller: _mToKCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Moon -> Natal Ketu (Default: 5° BUY)', border: OutlineInputBorder(), isDense: true)),
+            const SizedBox(height: 8),
+            TextField(controller: _mToRCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Moon -> Natal Rahu (Default: 20° SELL)', border: OutlineInputBorder(), isDense: true)),
+            const SizedBox(height: 8),
+            TextField(controller: _sunCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Sun -> Sun/Ketu/Rahu Offset (Default: 5°)', border: OutlineInputBorder(), isDense: true)),
+            const SizedBox(height: 8),
+            TextField(controller: _otherCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Jupiter/Saturn/Mars/Mercury Offset (Default: 5°)', border: OutlineInputBorder(), isDense: true)),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.tealAccent, foregroundColor: Colors.black),
+                onPressed: () {
+                  Map<String, double> updated = {};
+                  _controllers.forEach((key, ctrl) {
+                    updated[key] = double.tryParse(ctrl.text) ?? 0.0;
+                  });
+
+                  widget.onSave(
+                    updated,
+                    double.tryParse(_mToMCtrl.text) ?? 20.0,
+                    double.tryParse(_mToKCtrl.text) ?? 5.0,
+                    double.tryParse(_mToRCtrl.text) ?? 20.0,
+                    double.tryParse(_sunCtrl.text) ?? 5.0,
+                    double.tryParse(_otherCtrl.text) ?? 5.0,
+                  );
+                },
+                child: const Text('SAVE DEGREES & OFFSETS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+          EOF
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK Artifact
+        run: |
+          mkdir -p artifact_dir
+          cp build/app/outputs/flutter-apk/app-release.apk artifact_dir/Astro-Degree-Alert-Pro.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Astro-Degree-Alert-Pro
+          path: artifact_dir/Astro-Degree-Alert-Pro.apk
